@@ -1,7 +1,8 @@
-
 from datetime import datetime, timedelta
 
 from django.db import transaction, IntegrityError
+from django.utils import timezone
+
 from .models import Employee, Shift, PunchLog, Attendance
 
 
@@ -10,8 +11,19 @@ class AttendanceError(Exception):
     pass
 
 
+def _as_aware(dt: datetime) -> datetime:
+    """Make a datetime timezone-aware using the project's current timezone.
+
+    Accepts both naive and aware datetimes so the service works whether
+    callers pass an explicit test fixture or the default `timezone.now()`.
+    """
+    if timezone.is_aware(dt):
+        return dt
+    return timezone.make_aware(dt, timezone.get_current_timezone())
+
+
 def get_shift_date_for_timestamp(shift: Shift, ts: datetime):
-  
+    """Map a wall-clock timestamp to the attendance date it belongs to."""
     if not shift.crosses_midnight:
         return ts.date()
 
@@ -21,9 +33,10 @@ def get_shift_date_for_timestamp(shift: Shift, ts: datetime):
 
 
 def get_shift_midpoint(shift: Shift, shift_date):
-   
+    """Return the aware datetime that splits the shift into two halves."""
     shift_start_dt = datetime.combine(shift_date, shift.start_time)
-    return shift_start_dt + timedelta(minutes=shift.half_day_minutes)
+    midpoint_naive = shift_start_dt + timedelta(minutes=shift.half_day_minutes)
+    return _as_aware(midpoint_naive)
 
 
 def compute_halves(shift: Shift, shift_date, punch_in_dt: datetime, punch_out_dt: datetime):
@@ -32,15 +45,23 @@ def compute_halves(shift: Shift, shift_date, punch_in_dt: datetime, punch_out_dt
     - total worked >= half_day_minutes  -> ONE half PR: whichever half
       contains the punch-in moment, relative to the shift's midpoint
     - otherwise                         -> both halves AB
+
+    Worked minutes are clamped to the shift's full-day window so overtime
+    does not inflate the attendance record.
     """
-    total_minutes = int((punch_out_dt - punch_in_dt).total_seconds() // 60)
+    punch_in_aware = _as_aware(punch_in_dt)
+    punch_out_aware = _as_aware(punch_out_dt)
+
+    total_minutes = int(
+    (punch_out_aware - punch_in_aware).total_seconds() // 60
+)
 
     if total_minutes >= shift.full_day_minutes:
         return "PR", "PR", total_minutes
 
     if total_minutes >= shift.half_day_minutes:
         midpoint_dt = get_shift_midpoint(shift, shift_date)
-        if punch_in_dt < midpoint_dt:
+        if punch_in_aware < midpoint_dt:
             return "PR", "AB", total_minutes
         else:
             return "AB", "PR", total_minutes
@@ -50,7 +71,7 @@ def compute_halves(shift: Shift, shift_date, punch_in_dt: datetime, punch_out_dt
 
 @transaction.atomic
 def punch_in(employee: Employee, ts: datetime = None) -> Attendance:
-    ts = ts or datetime.now().replace(microsecond=0)
+    ts = ts or timezone.now().replace(microsecond=0)
     shift = employee.shift
     shift_date = get_shift_date_for_timestamp(shift, ts)
 
@@ -76,7 +97,6 @@ def punch_in(employee: Employee, ts: datetime = None) -> Attendance:
             attendance.status = "IN"
             attendance.save()
     except IntegrityError:
-       
         raise AttendanceError(
             f"Employee {employee.employee_code} was just punched in by another request "
             f"for {shift_date}. Please refresh and try again."
@@ -87,7 +107,7 @@ def punch_in(employee: Employee, ts: datetime = None) -> Attendance:
 
 @transaction.atomic
 def punch_out(employee: Employee, ts: datetime = None) -> Attendance:
-    ts = ts or datetime.now().replace(microsecond=0)
+    ts = ts or timezone.now().replace(microsecond=0)
     shift = employee.shift
     shift_date = get_shift_date_for_timestamp(shift, ts)
 
@@ -138,9 +158,8 @@ def auto_close_stale_attendance(days_threshold: int = 5) -> int:
     This does NOT touch PunchLog -- the original punch-in is preserved.
     Only the derived Attendance summary is updated, consistent with our
     "PunchLog is the immutable source of truth" design.
-
     """
-    cutoff = datetime.now() - timedelta(days=days_threshold)
+    cutoff = timezone.now() - timedelta(days=days_threshold)
 
     stale_records = Attendance.objects.filter(
         status="IN",
