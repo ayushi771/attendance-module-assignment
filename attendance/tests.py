@@ -147,4 +147,46 @@ class AttendanceLogicTests(TestCase):
         self.assertEqual(count, 0)
         a = Attendance.objects.get(employee=emp)
         self.assertEqual(a.status, "IN")
-    
+
+
+    def test_exact_270_minutes_is_half_day_pr(self):
+        """Exactly 270 minutes (4.5h) should just barely qualify as half-day PR."""
+        emp = Employee.objects.create(employee_code="E13", name="Boundary270", shift=self.gs)
+        services.punch_in(emp, dt("05-09-2026 12:00:00"))
+        a = services.punch_out(emp, dt("05-09-2026 16:30:00"))  # exactly 270 min
+        self.assertEqual(a.first_half, "PR")
+        self.assertEqual(a.second_half, "AB")
+        self.assertEqual(a.total_worked_minutes, 270)
+
+    def test_exact_540_minutes_is_full_day_pr(self):
+        """Exactly 540 minutes (9h) should just barely qualify as full-day PR/PR."""
+        emp = Employee.objects.create(employee_code="E14", name="Boundary540", shift=self.gs)
+        services.punch_in(emp, dt("05-09-2026 12:00:00"))
+        a = services.punch_out(emp, dt("05-09-2026 21:00:00"))  # exactly 540 min
+        self.assertEqual(a.first_half, "PR")
+        self.assertEqual(a.second_half, "PR")
+        self.assertEqual(a.total_worked_minutes, 540)
+
+    def test_gs_punch_out_never_matches_previous_day_stale_record(self):
+        """
+        A GS punch-out should NEVER close a stale open record from a
+        previous day, since GS doesn't cross midnight. This is the fix
+        for the punch-out lookback bug.
+        """
+        emp = Employee.objects.create(employee_code="E15", name="StaleGS", shift=self.gs)
+
+        # Day 1: punch in, forget to punch out (stays open forever)
+        services.punch_in(emp, dt("05-09-2026 12:10:00"))
+
+        # Day 2: punch in creates a NEW record (different attendance_date)
+        services.punch_in(emp, dt("06-09-2026 12:05:00"))
+
+        # Day 2: punch out should close Day 2's record, NOT Day 1's stale one
+        a = services.punch_out(emp, dt("06-09-2026 21:10:00"))
+        self.assertEqual(str(a.attendance_date), "2026-09-06")
+        self.assertEqual(a.total_worked_minutes, 545)  # ~9h05m, correctly from Day 2 only
+
+        # Day 1's record should still be sitting open, untouched
+        day1_record = Attendance.objects.get(employee=emp, attendance_date="2026-09-05")
+        self.assertEqual(day1_record.status, "IN")
+        self.assertIsNone(day1_record.punch_out_timestamp)

@@ -1,20 +1,30 @@
-from datetime import datetime , timedelta
-from django.db import transaction
-from .models import PunchLog, Attendance, Employee, Shift
+
+from datetime import datetime, timedelta
+
+from django.db import transaction, IntegrityError
+from .models import Employee, Shift, PunchLog, Attendance
+
 
 class AttendanceError(Exception):
+    """Raised for business-rule violations (e.g. double punch-in)."""
     pass
 
-def get_shift_date_for_timestamp(shift: Shift , ts: datetime):
-       if not shift.crosses_midnight:
-           return ts.date()
-       if ts.time() >= shift.start_time:
-           return ts.date()
-       return ts.date() - timedelta(days=1)
 
-def get_shift_midpoint(Shift: Shift , shift_date):
-     shiftstart_dt = datetime.combine(shift_date, Shift.start_time)
-     return shiftstart_dt + (timedelta(minutes=Shift.full_day_minutes) / 2)
+def get_shift_date_for_timestamp(shift: Shift, ts: datetime):
+  
+    if not shift.crosses_midnight:
+        return ts.date()
+
+    if ts.time() >= shift.start_time:
+        return ts.date()
+    return ts.date() - timedelta(days=1)
+
+
+def get_shift_midpoint(shift: Shift, shift_date):
+   
+    shift_start_dt = datetime.combine(shift_date, shift.start_time)
+    return shift_start_dt + timedelta(minutes=shift.half_day_minutes)
+
 
 def compute_halves(shift: Shift, shift_date, punch_in_dt: datetime, punch_out_dt: datetime):
     """
@@ -35,7 +45,8 @@ def compute_halves(shift: Shift, shift_date, punch_in_dt: datetime, punch_out_dt
         else:
             return "AB", "PR", total_minutes
 
-    return "AB", "AB", total_minutes 
+    return "AB", "AB", total_minutes
+
 
 @transaction.atomic
 def punch_in(employee: Employee, ts: datetime = None) -> Attendance:
@@ -44,8 +55,9 @@ def punch_in(employee: Employee, ts: datetime = None) -> Attendance:
     shift_date = get_shift_date_for_timestamp(shift, ts)
 
     existing = Attendance.objects.select_for_update().filter(
-    employee=employee, attendance_date=shift_date
-).first()
+        employee=employee, attendance_date=shift_date
+    ).first()
+
     if existing and existing.status == "IN":
         raise AttendanceError(
             f"Employee {employee.employee_code} already punched in for {shift_date} "
@@ -56,13 +68,22 @@ def punch_in(employee: Employee, ts: datetime = None) -> Attendance:
             f"Employee {employee.employee_code} already has a completed record for {shift_date}."
         )
 
-    PunchLog.objects.create(employee=employee, punch_type="IN", punch_timestamp=ts)
+    try:
+        with transaction.atomic():
+            PunchLog.objects.create(employee=employee, punch_type="IN", punch_timestamp=ts)
+            attendance = existing or Attendance(employee=employee, attendance_date=shift_date, shift=shift)
+            attendance.punch_in_timestamp = ts
+            attendance.status = "IN"
+            attendance.save()
+    except IntegrityError:
+       
+        raise AttendanceError(
+            f"Employee {employee.employee_code} was just punched in by another request "
+            f"for {shift_date}. Please refresh and try again."
+        )
 
-    attendance = existing or Attendance(employee=employee, attendance_date=shift_date, shift=shift)
-    attendance.punch_in_timestamp = ts
-    attendance.status = "IN"
-    attendance.save()
     return attendance
+
 
 @transaction.atomic
 def punch_out(employee: Employee, ts: datetime = None) -> Attendance:
@@ -70,18 +91,21 @@ def punch_out(employee: Employee, ts: datetime = None) -> Attendance:
     shift = employee.shift
     shift_date = get_shift_date_for_timestamp(shift, ts)
 
-    # Night-shift punch-out might belong to "today" or "yesterday"'s
+    possible_dates = [shift_date]
+    if shift.crosses_midnight:
+        possible_dates.append(shift_date - timedelta(days=1))
+
     attendance = (
-    Attendance.objects
-    .select_for_update()
-    .filter(
-        employee=employee,
-        attendance_date__in=[shift_date, shift_date - timedelta(days=1)],
-        status="IN",
+        Attendance.objects
+        .select_for_update()
+        .filter(
+            employee=employee,
+            attendance_date__in=possible_dates,
+            status="IN",
+        )
+        .order_by("-attendance_date")
+        .first()
     )
-    .order_by("-attendance_date")
-    .first()
-)
     if not attendance:
         raise AttendanceError(
             f"No open punch-in found for employee {employee.employee_code} around {ts}."
@@ -103,12 +127,17 @@ def punch_out(employee: Employee, ts: datetime = None) -> Attendance:
     attendance.save()
     return attendance
 
+
 def auto_close_stale_attendance(days_threshold: int = 5) -> int:
     """
     Finds attendance records still stuck in "IN" status where the
     punch-in happened `days_threshold` or more days ago, and marks
     both halves as "PT" (per business rule). Returns the number of
     records closed.
+
+    This does NOT touch PunchLog -- the original punch-in is preserved.
+    Only the derived Attendance summary is updated, consistent with our
+    "PunchLog is the immutable source of truth" design.
 
     """
     cutoff = datetime.now() - timedelta(days=days_threshold)
