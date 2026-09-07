@@ -239,8 +239,9 @@ scenario is also covered by the automated test suite.
   from the view layer, so this would be a small change, not a rewrite.
 
 ---
-
 ## 9. Project Structure
+
+'''
 attendance_module/
 ├── config/                          # Django project (settings, root URLs)
 │   ├── __init__.py
@@ -273,3 +274,4 @@ attendance_module/
 ├── .gitignore
 ├── .env                             # Not committed — see Step 4 above to create your own
 └── README.md
+'''
