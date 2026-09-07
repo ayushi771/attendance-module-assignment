@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Attendance System</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+            max-width: 780px;
+            margin: 40px auto;
+            background: #f0f2f5;
+            color: #1a1a2e;
+            padding: 0 20px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #1a1a2e;
+            margin-bottom: 28px;
+        }
+        h1::before { content: "🕒 "; }
+
+        .card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 1.5rem;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        .punch-card {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .punch-card select {
+            width: 100%;
+            max-width: 320px;
+            padding: 10px 12px;
+            margin-bottom: 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #fafafa;
+            color: #1a1a2e;
+        }
+        .emp-name {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            white-space: nowrap;
+        }
+        .status-line {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 18px;
+            min-height: 20px;
+            white-space: nowrap;
+        }
+        .punch-btn {
+            width: 100%;
+            max-width: 260px;
+            padding: 12px 8px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: transform 0.1s ease, opacity 0.15s ease;
+        }
+        .punch-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+        .punch-btn:active:not(:disabled) { transform: translateY(0); }
+        .punch-btn.in { background: linear-gradient(135deg, #22c55e, #16a34a); }
+        .punch-btn.out { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .punch-btn.disabled { background: #d1d5db; cursor: not-allowed; color: #9ca3af; }
+
+        /* Summary */
+        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 1.25rem; }
+        .summary-box {
+            border-radius: 12px;
+            padding: 1.1rem;
+            text-align: center;
+            border: 1px solid transparent;
+        }
+        .summary-box.total { background: #f3f4f6; border-color: #e5e7eb; }
+        .summary-box.present { background: #ecfdf5; border-color: #bbf7d0; }
+        .summary-box.absent { background: #fef2f2; border-color: #fecaca; }
+        .summary-num { font-size: 26px; font-weight: 800; line-height: 1; }
+        .summary-label { font-size: 12px; color: #6b7280; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+        .summary-box.total .summary-num { color: #374151; }
+        .summary-box.present .summary-num { color: #16a34a; }
+        .summary-box.absent .summary-num { color: #dc2626; }
+
+        /* Live feed */
+        .feed-title {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 14px; font-weight: 700; margin-bottom: 12px;
+            text-transform: uppercase; letter-spacing: 0.4px; color: #374151;
+        }
+        .live-dot {
+            width: 9px; height: 9px; border-radius: 50%; background: #22c55e;
+            display: inline-block; animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+            70% { box-shadow: 0 0 0 7px rgba(34,197,94,0); }
+            100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+        }
+        .feed-box { max-height: 190px; overflow-y: auto; }
+
+        .feed-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 4px;
+            font-size: 13px;
+            border-bottom: 1px solid #f3f4f6;
+            animation: slideIn 0.3s ease-out;
+        }
+        .feed-item:last-child { border-bottom: none; }
+        .feed-item .feed-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+            flex: 1;
+        }
+        .feed-item .feed-left span:first-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .feed-item .feed-tag {
+            font-size: 10px;
+            padding: 2px 7px;
+            flex-shrink: 0;
+        }
+        .feed-item .feed-time {
+            font-size: 11px;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+
+        .feed-tag { font-weight: 700; border-radius: 20px; letter-spacing: 0.3px; }
+        .feed-tag.IN { background: #dcfce7; color: #15803d; }
+        .feed-tag.OUT { background: #fee2e2; color: #b91c1c; }
+        .feed-time { color: #9ca3af; font-variant-numeric: tabular-nums; }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Table */
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 780px; }
+        th, td { padding: 10px 8px; text-align: left; font-size: 12.5px; white-space: nowrap; }
+        th {
+            color: #6b7280; font-weight: 700; text-transform: uppercase; font-size: 10.5px;
+            letter-spacing: 0.4px; border-bottom: 2px solid #f0f2f5;
+        }
+        td { border-bottom: 1px solid #f3f4f6; color: #374151; }
+        tbody tr:hover { background: #fafbfc; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        .badge {
+            font-size: 10.5px; font-weight: 700; padding: 3px 9px;
+            border-radius: 20px; letter-spacing: 0.3px;
+        }
+        .badge.pr { background: #dcfce7; color: #15803d; }
+        .badge.ab { background: #fee2e2; color: #b91c1c; }
+        .badge.pt { background: #fef3c7; color: #b45309; }
+        .badge.in-progress { background: #dbeafe; color: #1d4ed8; }
+
+        .section-title {
+            font-size: 15px; font-weight: 700; margin: 0 0 14px; color: #1a1a2e;
+        }
+    </style>
+</head>
+<body>
+    <h1>ATTENDANCE SYSTEM</h1>
+
+    <div class="card punch-card">
+        <select id="empSel" onchange="onSelectChange()"></select>
+        <div class="emp-name" id="empName">—</div>
+        <div class="status-line" id="statusLine">Loading...</div>
+        <button class="punch-btn" id="punchBtn" onclick="handlePunch()">...</button>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-box total">
+            <div class="summary-num" id="totalNum">-</div>
+            <div class="summary-label">Employees</div>
+        </div>
+        <div class="summary-box present">
+            <div class="summary-num" id="presentNum">-</div>
+            <div class="summary-label">Present</div>
+        </div>
+        <div class="summary-box absent">
+            <div class="summary-num" id="absentNum">-</div>
+            <div class="summary-label">Absent</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="feed-title"><span class="live-dot"></span> Live Activity</div>
+        <div class="feed-box" id="feed"></div>
+    </div>
+
+    <div class="card">
+        <div class="section-title">Attendance Records</div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Employee ID</th>
+                        <th>Employee Name</th>
+                        <th>Attendance Date</th>
+                        <th>Shift</th>
+                        <th>Punch In Date</th>
+                        <th>Punch In Time</th>
+                        <th>Punch Out Date</th>
+                        <th>Punch Out Time</th>
+                        <th>First Half</th>
+                        <th>Second Half</th>
+                        <th>Total Worked</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API = "/api";
+        let employees = [];
+        let todayRows = [];
+        let seenLogIds = new Set();
+        let selectedCode = null;
+
+        function todayStr() { return new Date().toISOString().split("T")[0]; }
+
+        function formatDate(isoDate) {
+            const [y, m, d] = isoDate.split("-");
+            return `${d}-${m}-${y}`;
+        }
+
+        function halfBadge(value) {
+            if (!value) return "";
+            const cls = value === "PR" ? "pr" : value === "PT" ? "pt" : "ab";
+            return `<span class="badge ${cls}">${value}</span>`;
+        }
+
+        async function loadEmployees() {
+            const res = await fetch(`${API}/employees?limit=500`);
+            const data = await res.json();
+            employees = data.results || data;
+            const sel = document.getElementById("empSel");
+            sel.innerHTML = employees.map(e => `<option value="${e.employee_code}">${e.employee_code} - ${e.name}</option>`).join("");
+            selectedCode = employees.length ? employees[0].employee_code : null;
+        }
+
+        function onSelectChange() {
+            selectedCode = document.getElementById("empSel").value;
+            renderCard();
+        }
+
+        async function loadAttendance() {
+            const res = await fetch(`${API}/attendance?limit=200`);
+            const data = await res.json();
+            const allRows = data.results || data;
+            todayRows = allRows.filter(r => r.attendance_date === todayStr());
+
+            const tbody = document.getElementById("tbody");
+            tbody.innerHTML = allRows.map(r => `
+                <tr>
+                    <td>${r.employee_code}</td>
+                    <td>${r.employee_name}</td>
+                    <td>${formatDate(r.attendance_date)}</td>
+                    <td>${r.shift_code}</td>
+                    <td>${r.punch_in_date ? formatDate(r.punch_in_date) : ""}</td>
+                    <td>${r.punch_in_time || ""}</td>
+                    <td>${r.punch_out_date ? formatDate(r.punch_out_date) : ""}</td>
+                    <td>${r.punch_out_time || ""}</td>
+                    <td>${halfBadge(r.first_half)}</td>
+                    <td>${halfBadge(r.second_half)}</td>
+                    <td>${r.total_worked_minutes !== null && r.total_worked_minutes !== undefined
+                            ? r.total_worked_minutes
+                            : (r.status === "IN" ? '<span class="badge in-progress">IN</span>' : "")}</td>
+                </tr>
+            `).join("");
+
+            const total = employees.length;
+
+            const present = todayRows.filter(r =>
+                r.status === "IN" || r.first_half === "PR" || r.second_half === "PR"
+            ).length;
+            const absent = total - present;
+
+            document.getElementById("totalNum").textContent = total;
+            document.getElementById("presentNum").textContent = present;
+            document.getElementById("absentNum").textContent = Math.max(absent, 0);
+
+            renderCard();
+        }
+
+        async function loadFeed() {
+            const res = await fetch(`${API}/punch-logs`);
+            const data = await res.json();
+            const logs = data.results || data;
+            const feed = document.getElementById("feed");
+
+            const newLogs = logs.filter(l => !seenLogIds.has(l.id));
+            newLogs.reverse().forEach(l => {
+                seenLogIds.add(l.id);
+                const item = document.createElement("div");
+                item.className = "feed-item";
+                const time = new Date(l.punch_timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                item.innerHTML = `
+                    <span class="feed-left">
+                        <span>${l.employee_code} - ${l.employee_name}</span>
+                        <span class="feed-tag ${l.punch_type}">${l.punch_type}</span>
+                    </span>
+                    <span class="feed-time">${time}</span>`;
+                feed.prepend(item);
+            });
+            while (feed.children.length > 15) feed.removeChild(feed.lastChild);
+        }
+
+        function renderCard() {
+            if (!selectedCode) return;
+            const emp = employees.find(e => e.employee_code === selectedCode);
+            if (!emp) return;
+            document.getElementById("empName").textContent = `${emp.employee_code} - ${emp.name}`;
+
+            const row = todayRows.find(r => r.employee_code === selectedCode);
+            const line = document.getElementById("statusLine");
+            const btn = document.getElementById("punchBtn");
+
+            if (!row) {
+                line.textContent = "Not punched in";
+                btn.textContent = "PUNCH IN";
+                btn.className = "punch-btn in";
+                btn.disabled = false;
+            } else if (row.status === "IN") {
+                line.textContent = `Punched in at ${row.punch_in_time}`;
+                btn.textContent = "PUNCH OUT";
+                btn.className = "punch-btn out";
+                btn.disabled = false;
+            } else {
+                line.textContent = `Done — worked ${row.total_worked_minutes} min`;
+                btn.textContent = "COMPLETED FOR TODAY";
+                btn.className = "punch-btn disabled";
+                btn.disabled = true;
+            }
+        }
+
+        async function handlePunch() {
+            const row = todayRows.find(r => r.employee_code === selectedCode);
+            const endpoint = (row && row.status === "IN") ? "punch-out" : "punch-in";
+
+            const res = await fetch(`${API}/${endpoint}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ employee_code: selectedCode })
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                alert(err.detail || "Something went wrong.");
+            }
+            await loadAttendance();
+            await loadFeed();
+        }
+
+        (async function init() {
+            await loadEmployees();
+            await loadAttendance();
+            await loadFeed();
+            setInterval(loadAttendance, 3000);
+            setInterval(loadFeed, 2000);
+        })();
+    </script>
+</body>
+</html>
