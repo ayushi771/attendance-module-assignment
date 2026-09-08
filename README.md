@@ -242,7 +242,6 @@ scenario is also covered by the automated test suite.
 ## 9. Project Structure
 
 ```
-```text
 attendance_module/
 ├── config/                          # Django project (settings, root URLs)
 │   ├── __init__.py
@@ -285,4 +284,4 @@ attendance_module/
 ├── .env                              # Not committed — see Step 4 above to create your own
 └── README.md                         # Project documentation
 ```
-```
+
