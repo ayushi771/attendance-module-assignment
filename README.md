@@ -81,7 +81,7 @@ python manage.py seed_demo
 ```
 
 This creates the exact scenario from the assignment's "Expected Output"
-table (Romin on GS, Deepesh on NS), so you can immediately verify the
+table, so you can immediately verify the
 calculated attendance matches what was specified.
 
 ### Step 8 — Run the server
