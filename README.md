@@ -242,36 +242,47 @@ scenario is also covered by the automated test suite.
 ## 9. Project Structure
 
 ```
+```text
 attendance_module/
 ├── config/                          # Django project (settings, root URLs)
 │   ├── __init__.py
-│   ├── settings.py                   # DB config, installed apps, DRF settings
-│   ├── urls.py                        # Root URL routing
-│   ├── asgi.py                         # ASGI entrypoint (not used in this submission)
-│   └── wsgi.py                          # WSGI entrypoint (used by runserver)
+│   ├── settings.py                  # DB config, installed apps, DRF settings
+│   ├── urls.py                      # Root URL routing
+│   ├── asgi.py                      # ASGI entrypoint (not used in this submission)
+│   └── wsgi.py                      # WSGI entrypoint (used by runserver)
+│
 ├── attendance/                      # Main Django app
 │   ├── __init__.py
-│   ├── apps.py                       # App config (Django boilerplate)
-│   ├── models.py                      # Shift, Employee, PunchLog, Attendance
-│   ├── services.py                     # Core business logic (punch in/out, half-day calc, auto-close)
-│   ├── serializers.py                   # DRF request/response schemas
-│   ├── views.py                          # API endpoints + dashboard view
-│   ├── urls.py                            # App-level URL routing
-│   ├── admin.py                            # Django admin registration
-│   ├── tests.py                             # Automated test suite
-│   ├── migrations/                          # Django schema migration history
+│   ├── apps.py                      # App config (Django boilerplate)
+│   ├── models.py                     # Shift, Employee, PunchLog, Attendance
+│   ├── services.py                   # Core business logic (punch in/out, half-day calc, auto-close)
+│   ├── serializers.py                # DRF request/response schemas
+│   ├── views.py                      # API endpoints + dashboard view
+│   ├── urls.py                       # App-level URL routing
+│   ├── admin.py                      # Django admin registration
+│   ├── tests.py                      # Automated test suite
+│   ├── tests_concurrency.py          # Concurrent punch-in/punch-out and race-condition tests
+│   │
+│   ├── migrations/                   # Django schema migration history
 │   │   ├── __init__.py
-│   │   ├── 0001_initial.py                     # Initial Shift, Employee, PunchLog, Attendance tables
-│   │   ├── 0002_alter_attendance_status.py      # Widened status field (fixes AUTO_CLOSED truncation)
-│   │   └── 0003_alter_attendance_first_half_and_more.py  # Widened first_half/second_half/status for PT
+│   │   ├── 0001_initial.py           # Initial Shift, Employee, PunchLog, Attendance tables
+│   │   ├── 0002_alter_attendance_status.py
+│   │   │                                # Widened status field (fixes AUTO_CLOSED truncation)
+│   │   └── 0003_alter_attendance_first_half_and_more.py
+│   │                                    # Widened first_half/second_half/status for PT
+│   │
 │   └── management/commands/
-│       ├── seed_demo.py                        # Recreates the assignment's exact sample scenario
-│       ├── live_demo.py                         # Simulates realistic live punch activity for demos
-│       └── auto_close_attendance.py              # Marks stale (5+ day) open punches as PT
+│       ├── seed_demo.py               # Recreates the assignment's exact sample scenario
+│       ├── live_demo.py               # Simulates realistic live punch activity for demos
+│       ├── auto_close_attendance.py   # Marks stale (5+ day) open punches as PT
+│       └── check_missing_punchouts.py # Flags missing punch-outs after shift end + grace period
+│
 ├── templates/
 │   └── dashboard.html                # Live frontend dashboard (punch card, summary, activity feed, table)
-├── requirements.txt
-├── .gitignore
-├── .env                             # Not committed — see Step 4 above to create your own
-└── README.md
+│
+├── requirements.txt                  # Python dependencies
+├── .gitignore                        # Git ignored files and folders
+├── .env                              # Not committed — see Step 4 above to create your own
+└── README.md                         # Project documentation
+```
 ```
