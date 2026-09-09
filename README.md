@@ -11,7 +11,7 @@ no separate frontend build step) so the system can be demoed end-to-end in a bro
 
 ## Demo
 
-### Live Dashboard
+### Mian Page
 Punch card, live activity feed, alerts panel (late/early/missing punch-out detection),
 and attendance table — all fed by the same REST API, updating in real time.
 
