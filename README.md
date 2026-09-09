@@ -9,6 +9,38 @@ no separate frontend build step) so the system can be demoed end-to-end in a bro
 
 ---
 
+## Demo
+
+### Live Dashboard
+Punch card, live activity feed, alerts panel (late/early/missing punch-out detection),
+and attendance table — all fed by the same REST API, updating in real time.
+
+<img width="1920" height="3893" alt="screencapture-127-0-0-1-8000-2026-09-09-15_35_44" src="https://github.com/user-attachments/assets/e903fe99-d006-4c64-8fea-f683032c3468" />
+
+
+### Database Design (Django Admin)
+Every attendance record tracks lateness, earliness, and missing punch-outs as
+first-class fields — not just calculated on the fly and thrown away, but stored
+and filterable, so a reviewer/HR admin can query "show me everyone who was late
+today" directly.
+
+<img width="1781" height="872" alt="Screenshot 2026-09-09 153918" src="https://github.com/user-attachments/assets/07dacbd3-0e9d-4eab-aed9-94e8eae1b0d7" /><img width="1436" height="952" alt="Screenshot 2026-09-09 153935" src="https://github.com/user-attachments/assets/69735a24-96ab-44c4-82b0-8063c19aacd4" />
+
+
+
+### Test Suite
+25 automated tests covering the assignment's exact sample scenarios, plus edge
+cases: exact threshold boundaries (270/540 minutes), the punch-out lookback fix,
+late/early punch handling, missing punch-out detection, and dedicated concurrency
+tests using real threads to prove race-condition protection actually works under
+simultaneous load.
+
+<img width="937" height="252" alt="test" src="https://github.com/user-attachments/assets/d2ed4dff-5bac-41d8-8c1e-8f35ac7adbca" />
+![Uploading Screenshot 2026-09-09 154618.png…]()
+
+
+---
+
 ## 1. Tech Stack
 
 | Layer | Choice |
